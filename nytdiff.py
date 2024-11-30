@@ -556,6 +556,20 @@ class NYTParser(BaseParser):
             self.remove_old("article_id")
 
 
+def save_bsky_session(session_id):
+    with open("bsky_session_id.txt", "w") as f:
+        f.write(session_id)
+
+
+def get_bsky_session():
+    try:
+        with open("bsky_session_id.txt", "r") as f:
+            session_id = f.read().strip()
+    except FileNotFoundError:
+        session_id = None
+    return session_id
+
+
 def main():
     # logging
     logging.basicConfig(
@@ -589,14 +603,27 @@ def main():
 
     bsky_api = None
     if "BLUESKY_LOGIN" in os.environ:
-        bsky_login = os.environ["BLUESKY_LOGIN"]
-        bsky_passwd = os.environ["BLUESKY_PASSWD"]
         bsky_api = Client(base_url="https://bsky.social")
-        try:
-            bsky_api.login(bsky_login, bsky_passwd)
-        except:
-            logging.exception("Bluesky login failed")
-            return
+        profile = None
+        session_id = get_bsky_session()
+        if session_id:
+            try:
+                profile = bsky_api.login(session_string=session_id)
+            except:
+                logging.exception("Bluesky session login failed")
+
+        if profile is None:
+            bsky_login = os.environ["BLUESKY_LOGIN"]
+            bsky_passwd = os.environ["BLUESKY_PASSWD"]
+            try:
+                profile = bsky_api.login(bsky_login, bsky_passwd)
+            except:
+                logging.exception("Bluesky login failed")
+                return
+
+        new_session_id = bsky_api.export_session_string()
+        if new_session_id != session_id:
+            save_bsky_session(new_session_id)
 
     try:
         logging.debug("Starting NYT")
